@@ -356,6 +356,10 @@ class ArsPathPlanner:
     # Init
     self.states_solution_short = []
 
+    # Check
+    if(len(self.states_solution)==0):
+      return
+
     # Compute cost raw
     cost_raw_vec = []
     for states_sol_idx in range(len(self.states_solution)-1):
@@ -404,11 +408,14 @@ class ArsPathPlanner:
     # Compute total of path and distribute it
     length_path_acumm = []
     length_path_acumm.append(0.0)
-    for waypoint_path_i_idx in range(len(robot_path)-1):
-      length_path_sect = np.linalg.norm(robot_path[waypoint_path_i_idx]-robot_path[waypoint_path_i_idx+1])
-      length_path_acumm_i = length_path_acumm[-1] + length_path_sect
-      length_path_acumm.append(length_path_acumm_i)
-    perc_length_path_acumm =  [x / length_path_acumm[-1] for x in length_path_acumm]
+    if(len(robot_path)!=0):
+      for waypoint_path_i_idx in range(len(robot_path)-1):
+        length_path_sect = np.linalg.norm(robot_path[waypoint_path_i_idx]-robot_path[waypoint_path_i_idx+1])
+        length_path_acumm_i = length_path_acumm[-1] + length_path_sect
+        length_path_acumm.append(length_path_acumm_i)
+      perc_length_path_acumm =  [x / length_path_acumm[-1] for x in length_path_acumm]
+    else:
+      perc_length_path_acumm = 1.0
 
     # Delta pos z
     delta_pos_z = self.robot_posi_ref[2] - self.robot_posi[2]
