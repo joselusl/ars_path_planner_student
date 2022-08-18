@@ -1,0 +1,6 @@
+geometry_msgs/PoseStamped pose_robot
+geometry_msgs/PoseStamped pose_desired
+---
+std_msgs/Bool sucess
+nav_msgs/Path collision_free_traj
+nav_msgs/Path collision_free_traj_raw

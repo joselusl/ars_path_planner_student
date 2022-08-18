@@ -5,7 +5,9 @@ from numpy import *
 
 import os
 
-
+# pyyaml - https://pyyaml.org/wiki/PyYAMLDocumentation
+import yaml
+from yaml.loader import SafeLoader
 
 
 # ROS
@@ -29,8 +31,12 @@ import nav_msgs.msg
 from nav_msgs.msg import Path
 
 
+
 #
-from ars_path_planner import *
+from ars_path_planner_core import *
+
+from ars_path_planner.srv import GetCollisionFreePath, GetCollisionFreePathResponse
+from ars_path_planner.srv import CheckPathCollisionFree, CheckPathCollisionFreeResponse
 
 
 #
@@ -50,21 +56,19 @@ class ArsPathPlannerRos:
   # Timestamp reference
   time_stamp_reference = rospy.Time(0)
 
-  # Robot traj publisher
-  robot_traj_ref_pub = None
-  robot_traj_ref_raw_pub = None
-
-  # Robot pose subscriber
-  robot_pose_sub = None
-
   # Obstacles world subscriber
   obstacles_world_sub = None
 
-  # Robot pose ref subscriber
-  robot_pose_ref_sub = None
+  # Service server
+  #
+  compute_collision_free_path_srv = None
+  #
+  check_path_collision_free_srv = None
 
+  #
+  config_param_yaml_file_name = None
 
-  # Motion controller
+  # Path planner
   path_planner = ArsPathPlanner()
   
 
@@ -93,13 +97,32 @@ class ArsPathPlannerRos:
 
     #### READING PARAMETERS ###
     
-    # TODO
+    # Config param
+    default_config_param_yaml_file_name = os.path.join(pkg_path,'config','config_path_planner_core.yaml')
+    config_param_yaml_file_name_str = rospy.get_param('~config_param_path_planner_core_yaml_file', default_config_param_yaml_file_name)
+    print(config_param_yaml_file_name_str)
+    self.config_param_yaml_file_name = os.path.abspath(config_param_yaml_file_name_str)
 
     ###
 
+
+    # Load config param
+    with open(self.config_param_yaml_file_name,'r') as file:
+        # The FullLoader parameter handles the conversion from YAML
+        # scalar values to Python the dictionary format
+        self.config_param = yaml.load(file, Loader=SafeLoader)['path_planner_core']
+
+    if(self.config_param is None):
+      print("Error loading config param path planner")
+    else:
+      print("Config param path planner:")
+      print(self.config_param)
+
+    # Config parameters of path planner
+    self.path_planner.setConfigParameters(self.config_param)
+
     # init path planner
     self.path_planner.init()
-
     
     # End
     return
@@ -108,23 +131,15 @@ class ArsPathPlannerRos:
   def open(self):
 
     # Subscribers
-
-    #
-    self.robot_pose_ref_sub = rospy.Subscriber('robot_pose_des', PoseStamped, self.robotPoseRefCallback, queue_size=1)
-
-    # 
-    self.robot_pose_sub = rospy.Subscriber('robot_pose', PoseStamped, self.robotPoseCallback, queue_size=1)
-
     #
     self.obstacles_world_sub = rospy.Subscriber('obstacles_world', MarkerArray, self.obstaclesWorldCallback, queue_size=1)
     
 
-    # Publishers
-
-    # 
-    self.robot_traj_ref_raw_pub = rospy.Publisher('robot_trajectory_ref_raw', Path, queue_size=1)
-    # 
-    self.robot_traj_ref_pub = rospy.Publisher('robot_trajectory_ref', Path, queue_size=1)
+    # Service server
+    #
+    self.compute_collision_free_path_srv = rospy.Service('compute_collision_free_path', GetCollisionFreePath, self.computeCollisionFreePathCallback)
+    #
+    self.check_path_collision_free_srv = rospy.Service('check_path_collision_free', CheckPathCollisionFree, self.checkPathCollisionFreeCallback)
 
 
     # End
@@ -138,7 +153,7 @@ class ArsPathPlannerRos:
     return
 
 
-  def robotPoseRefCallback(self, robot_pose_ref_msg):
+  def setRobotPoseRef(self, robot_pose_ref_msg):
 
     # Timestamp
     if(robot_pose_ref_msg.header.stamp == rospy.Time(0)):
@@ -165,17 +180,12 @@ class ArsPathPlannerRos:
     # Set reference in the path planner
     self.path_planner.setRobotPoseRef(robot_posi_ref, robot_atti_quat_simp_ref)
 
-    # Call the path planner
-    self.path_planner.planPathCall()
-
-    # Publish planned path
-    self.robotTrajRefPublish()
 
     #
     return
 
 
-  def robotPoseCallback(self, robot_pose_msg):
+  def setRobotPose(self, robot_pose_msg):
 
     # Position
     robot_posi = np.zeros((3,), dtype=float)
@@ -214,6 +224,71 @@ class ArsPathPlannerRos:
     return
 
 
+  def computeCollisionFreePathCallback(self, request):
+
+    #
+    robot_pose_msg = request.pose_robot
+    self.setRobotPose(robot_pose_msg)
+
+    #
+    robot_pose_ref_msg = request.pose_desired
+    self.setRobotPoseRef(robot_pose_ref_msg)
+
+
+    # Call the path planner
+    self.path_planner.planPathCall()
+
+
+    #
+    robot_traj_ref_msg = self.robotTrajMsgGen(self.path_planner.robot_traj)
+    robot_traj_ref_raw_msg = self.robotTrajMsgGen(self.path_planner.robot_traj_raw)
+
+    #
+    serv_response = GetCollisionFreePathResponse()
+    serv_response.sucess.data = self.path_planner.flag_set_robot_traj
+    serv_response.collision_free_traj = robot_traj_ref_msg
+    serv_response.collision_free_traj_raw = robot_traj_ref_raw_msg
+
+    # end
+    return serv_response
+
+
+  def checkPathCollisionFreeCallback(self, request):
+
+    #
+    robot_traj_ref_msg = request.trajectory
+
+    # Set
+    robot_traj = []
+    for pose_i_msg in robot_traj_ref_msg.poses:
+
+      waypoint_i = ars_lib_helpers.PoseSimp()
+
+      waypoint_i.position[0] = pose_i_msg.pose.position.x
+      waypoint_i.position[1] = pose_i_msg.pose.position.y
+      waypoint_i.position[2] = pose_i_msg.pose.position.z
+
+      attitude_quat = ars_lib_helpers.Quaternion.zerosQuat()
+      attitude_quat[0] = pose_i_msg.pose.orientation.w
+      attitude_quat[1] = pose_i_msg.pose.orientation.x
+      attitude_quat[2] = pose_i_msg.pose.orientation.y
+      attitude_quat[3] = pose_i_msg.pose.orientation.z
+      waypoint_i.attitude_quat_simp = ars_lib_helpers.Quaternion.getSimplifiedQuatRobotAtti(attitude_quat)
+
+      robot_traj.append(waypoint_i)
+
+    # Check
+    is_collision_free = self.path_planner.checkPathCollisionFree(robot_traj)
+
+    # Response
+    serv_response = CheckPathCollisionFreeResponse()
+    serv_response.sucess.data = True
+    serv_response.is_collision_free.data = is_collision_free
+
+    # End
+    return serv_response
+
+
   def robotTrajMsgGen(self, robot_traj):
 
     # Generate message
@@ -244,18 +319,4 @@ class ArsPathPlannerRos:
         robot_traj_ref_msg.poses.append(pose_i_msg)
 
     return robot_traj_ref_msg
-
-
-  def robotTrajRefPublish(self):
-
-    #
-    robot_traj_ref_msg = self.robotTrajMsgGen(self.path_planner.robot_traj)
-    robot_traj_ref_raw_msg = self.robotTrajMsgGen(self.path_planner.robot_traj_raw)
-
-    # Publish
-    self.robot_traj_ref_pub.publish(robot_traj_ref_msg)
-    self.robot_traj_ref_raw_pub.publish(robot_traj_ref_raw_msg)
-
-    #
-    return
 

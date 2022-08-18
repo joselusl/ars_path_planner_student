@@ -125,29 +125,55 @@ class ArsPathPlanner:
 
 
     # environment dimensions (in m)
-    #self.env_dims = {'x': [-10.0, 10.0],
-    #                  'y': [-10.0, 10.0]}
-    self.env_dims = {'x': [-2.0, 8.0],
-                      'y': [-2.0, 8.0]}
+    self.env_dims = {'x': [0.0, 0.0],
+                      'y': [0.0, 0.0]}
 
     # Environment sampling distance maximum per dimension (in m)
-    self.env_sampling_dist_max_dim = 0.5
+    self.env_sampling_dist_max_dim = 0.0
 
     # Nodes min neighbourhood
-    self.min_neighbourhood = 4
+    self.min_neighbourhood = 0.0
 
     # Robot size radius (in m)
-    self.robot_size_radius = 0.3
+    self.robot_size_radius = 0.0
     # (in m)
-    self.dist_influence = 1.25
+    self.dist_influence = 0.0
     # 
-    self.gain_avoidance = 2.5
+    self.gain_avoidance = 0.0
 
     # sampling distance cost calculation (in m)
-    self.cost_sampling_dist_max = 0.5
+    self.cost_sampling_dist_max = 0.0
 
 
     # End
+    return
+
+
+  def setConfigParameters(self, config_param):
+
+    # Config parameters
+
+    # environment dimensions (in m)
+    self.env_dims = {'x': config_param['algorithm']['env_dims']['x'],
+                      'y': config_param['algorithm']['env_dims']['y']}
+
+    # Environment sampling distance maximum per dimension (in m)
+    self.env_sampling_dist_max_dim = config_param['algorithm']['env_sampling_dist_max_dim']
+
+    # Nodes min neighbourhood
+    self.min_neighbourhood = config_param['algorithm']['min_neighbourhood']
+
+    # Robot size radius (in m)
+    self.robot_size_radius = config_param['algorithm']['robot_size_radius']
+    # (in m)
+    self.dist_influence = config_param['algorithm']['dist_influence']
+    # 
+    self.gain_avoidance = config_param['algorithm']['gain_avoidance']
+
+    # sampling distance cost calculation (in m)
+    self.cost_sampling_dist_max = config_param['algorithm']['cost_sampling_dist_max']
+
+    #
     return
 
 
@@ -351,6 +377,30 @@ class ArsPathPlanner:
     return distance
 
 
+  def computeCostWithObstInPath(self, robot_traj):
+
+    #
+    cost_total = 0.0
+
+    # Pre-check
+    if(not robot_traj):
+      return cost_total
+
+    # Iterate for all waypoints
+    for waypoint_traj_i_idx in range(len(robot_traj)-1):
+
+      #
+      cost_segment = self.computeCostWithObstBetweenTwoPosi(robot_traj[waypoint_traj_i_idx].position[0:2], robot_traj[waypoint_traj_i_idx+1].position[0:2])
+
+      if(math.isinf(cost_segment)):
+        cost_total = float('inf')
+      else:
+        cost_total += cost_segment
+
+    #
+    return cost_total
+
+
   def shortenStateSolution(self):
 
     # Init
@@ -514,3 +564,20 @@ class ArsPathPlanner:
 
     ### End
     return
+
+
+  def checkPathCollisionFree(self, robot_traj):
+
+    # Pre-check
+    if(not robot_traj):
+      return True
+
+    #
+    cost_traj = self.computeCostWithObstInPath(robot_traj)
+    
+    #
+    if(math.isinf(cost_traj)):
+      return False
+
+    #
+    return True

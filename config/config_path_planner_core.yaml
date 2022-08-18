@@ -1,0 +1,20 @@
+path_planner_core:
+  world_frame: 'world'
+  algorithm:
+    # environment dimensions (in m)
+    env_dims:
+      x: [-2.0, 8.0]
+      y: [-2.0, 8.0]
+    # Environment sampling distance maximum per dimension (in m)
+    env_sampling_dist_max_dim: 0.5
+    # Nodes min neighbourhood
+    min_neighbourhood: 4
+    # Robot size radius (in m)
+    robot_size_radius: 0.3
+    # (in m)
+    dist_influence: 1.25
+    # 
+    gain_avoidance: 2.5
+    # sampling distance cost calculation (in m)
+    cost_sampling_dist_max: 0.5
+  

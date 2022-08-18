@@ -1,0 +1,4 @@
+nav_msgs/Path trajectory
+---
+std_msgs/Bool sucess
+std_msgs/Bool is_collision_free
