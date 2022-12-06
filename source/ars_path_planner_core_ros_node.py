@@ -9,7 +9,7 @@ import os
 import rospy
 
 
-from ars_path_planner_ros import *
+from ars_path_planner_core_ros import *
 
 
 
