@@ -3,11 +3,8 @@
 import numpy as np
 from numpy import *
 
-
-
-#
-import ars_lib_helpers
-
+# ROS
+from rclpy.logging import get_logger
 
 
 
@@ -21,7 +18,6 @@ class GraphNode:
 
   # List of connected edges ids
   list_edges_ids = []
-
 
   def __init__(self):
 
@@ -93,6 +89,8 @@ class ConnectedUndirectedGeometricGraph:
   dict_graph_edges = {}
   last_id_edges = -1
 
+  # ROS2 logger
+  logger = None
 
 
   def __init__(self):
@@ -104,6 +102,9 @@ class ConnectedUndirectedGeometricGraph:
     #
     self.ict_graph_edges = {}
     self.last_id_edges = -1
+
+    #
+    self.logger = get_logger('ars_connected_graph')
 
     return
 
@@ -121,10 +122,10 @@ class ConnectedUndirectedGeometricGraph:
 
     # check if nodes exist
     if(not node1_id in self.dict_graph_nodes):
-      print("Node 1 does not exist")
+      self.logger.info("Node 1 does not exist")
       return
     if(not node2_id in self.dict_graph_nodes):
-      print("Node 2 does not exist")
+      self.logger.info("Node 2 does not exist")
       return
 
     # check if edge already exists
@@ -212,10 +213,10 @@ class ConnectedUndirectedGeometricGraph:
   def computeDistanceBetweenNodes(self, node1_id, node2_id):
 
     if(not node1_id in self.dict_graph_nodes):
-      print("Node 1 does not exist")
+      self.logger.info("Node 1 does not exist")
       return
     if(not node2_id in self.dict_graph_nodes):
-      print("Node 2 does not exist")
+      self.logger.info("Node 2 does not exist")
       return
 
     dist_vec = self.dict_graph_nodes[node1_id].position - self.dict_graph_nodes[node2_id].position
@@ -299,16 +300,16 @@ class ConnectedUndirectedGeometricGraph:
 
 
   def printGraph(self, flag_disp_nodes = True, flag_disp_edges = False):
-    print("Graph")
+    self.logger.info("Graph")
     if(flag_disp_nodes):
-      print("Nodes:")
+      self.logger.info("Nodes:")
       for key in self.dict_graph_nodes:
-        print(key, '->', self.dict_graph_nodes[key].position, ';', self.dict_graph_nodes[key].list_edges_ids)
+        self.logger.info(key, '->', self.dict_graph_nodes[key].position, ';', self.dict_graph_nodes[key].list_edges_ids)
 
     if(flag_disp_edges):
-      print("Edges:")
+      self.logger.info("Edges:")
       for key in self.dict_graph_edges:
-        print(key, '->', self.dict_graph_edges[key].node1, '; ', self.dict_graph_edges[key].node2, '; ',self.dict_graph_edges[key].distance)
+        self.logger.info(key, '->', self.dict_graph_edges[key].node1, '; ', self.dict_graph_edges[key].node2, '; ',self.dict_graph_edges[key].distance)
 
 
   def getNumberOfNodes(self):

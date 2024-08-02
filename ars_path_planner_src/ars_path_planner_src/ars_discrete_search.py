@@ -11,18 +11,10 @@ import os
 
 
 # ROS
-
-import rospy
-
-import visualization_msgs.msg
-from visualization_msgs.msg import Marker
-from visualization_msgs.msg import MarkerArray
+from rclpy.logging import get_logger
 
 
-#
-import ars_lib_helpers
-
-from ars_connected_graph import *
+from ars_path_planner_src.ars_connected_graph import *
 
 
 
@@ -46,6 +38,8 @@ class ArsDiscreteSearch:
   computeCostG = None
   computeCostH = None
 
+  # ROS2 logger
+  logger = None
 
 
   #########
@@ -65,6 +59,9 @@ class ArsDiscreteSearch:
     self.computeCostG = None
     self.computeCostH = None
 
+    #
+    self.logger = get_logger('ars_discrete_search')
+    
     # End
     return
 

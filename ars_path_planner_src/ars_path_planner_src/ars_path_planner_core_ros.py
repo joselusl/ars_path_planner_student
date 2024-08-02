@@ -11,10 +11,11 @@ from yaml.loader import SafeLoader
 
 
 # ROS
+import rclpy
+from rclpy.node import Node
+from rclpy.time import Time
 
-import rospy
-
-import rospkg
+from ament_index_python.packages import get_package_share_directory
 
 import std_msgs.msg
 from std_msgs.msg import Header
@@ -30,23 +31,20 @@ from visualization_msgs.msg import MarkerArray
 import nav_msgs.msg
 from nav_msgs.msg import Path
 
-
+#
+import ars_lib_helpers.ars_lib_helpers as ars_lib_helpers
 
 #
-from ars_path_planner_core import *
+from ars_path_planner_src.ars_path_planner_core import *
 
-from ars_path_planner.srv import GetCollisionFreePath, GetCollisionFreePathResponse
-from ars_path_planner.srv import CheckPathCollisionFree, CheckPathCollisionFreeResponse
-
-
-#
-import ars_lib_helpers
+from ars_path_planner_srvs.srv import GetCollisionFreePath
+from ars_path_planner_srvs.srv import CheckPathCollisionFree
 
 
 
 
 
-class ArsPathPlannerRos:
+class ArsPathPlannerRos(Node):
 
   #######
 
@@ -54,7 +52,7 @@ class ArsPathPlannerRos:
   world_frame = 'world'
 
   # Timestamp reference
-  time_stamp_reference = rospy.Time(0)
+  time_stamp_reference = Time()
 
   # Obstacles world subscriber
   obstacles_world_sub = None
@@ -75,32 +73,40 @@ class ArsPathPlannerRos:
 
   #########
 
-  def __init__(self):
+  def __init__(self, node_name='ars_path_planner_node'):
+
+    # Init ROS
+    super().__init__(node_name)
 
     # Path planner
     self.path_planner = ArsPathPlanner()
+
+    #
+    self.__init(node_name)
 
     # end
     return
 
 
-  def init(self, node_name='ars_path_planner_node'):
-    #
-
-    # Init ROS
-    rospy.init_node(node_name, anonymous=True)
-
+  def __init(self, node_name='ars_path_planner_node'):
     
     # Package path
-    pkg_path = rospkg.RosPack().get_path('ars_path_planner')
+    try:
+      pkg_path = get_package_share_directory('ars_path_planner_src')
+      self.get_logger().info(f"The path to the package is: {pkg_path}")
+    except ModuleNotFoundError:
+      self.get_logger().info("Package not found")
     
 
     #### READING PARAMETERS ###
     
     # Config param
     default_config_param_yaml_file_name = os.path.join(pkg_path,'config','config_path_planner_core.yaml')
-    config_param_yaml_file_name_str = rospy.get_param('~config_param_path_planner_core_yaml_file', default_config_param_yaml_file_name)
-    print(config_param_yaml_file_name_str)
+    # Declare the parameter with a default value
+    self.declare_parameter('config_param_path_planner_core_yaml_file', default_config_param_yaml_file_name)
+    # Get the parameter value
+    config_param_yaml_file_name_str = self.get_parameter('config_param_path_planner_core_yaml_file').get_parameter_value().string_value
+    self.get_logger().info(config_param_yaml_file_name_str)
     self.config_param_yaml_file_name = os.path.abspath(config_param_yaml_file_name_str)
 
     ###
@@ -113,10 +119,10 @@ class ArsPathPlannerRos:
         self.config_param = yaml.load(file, Loader=SafeLoader)['path_planner_core']
 
     if(self.config_param is None):
-      print("Error loading config param path planner")
+      self.get_logger().info("Error loading config param path planner")
     else:
-      print("Config param path planner:")
-      print(self.config_param)
+      self.get_logger().info("Config param path planner:")
+      self.get_logger().info(str(self.config_param))
 
     # Config parameters of path planner
     self.path_planner.setConfigParameters(self.config_param)
@@ -132,14 +138,14 @@ class ArsPathPlannerRos:
 
     # Subscribers
     #
-    self.obstacles_world_sub = rospy.Subscriber('obstacles_world', MarkerArray, self.obstaclesWorldCallback, queue_size=1)
+    self.obstacles_world_sub = self.create_subscription(MarkerArray, 'obstacles_world', self.obstaclesWorldCallback, qos_profile=10)
     
 
     # Service server
     #
-    self.compute_collision_free_path_srv = rospy.Service('compute_collision_free_path', GetCollisionFreePath, self.computeCollisionFreePathCallback)
+    self.compute_collision_free_path_srv = self.create_service(GetCollisionFreePath, 'compute_collision_free_path', self.computeCollisionFreePathCallback)
     #
-    self.check_path_collision_free_srv = rospy.Service('check_path_collision_free', CheckPathCollisionFree, self.checkPathCollisionFreeCallback)
+    self.check_path_collision_free_srv = self.create_service(CheckPathCollisionFree, 'check_path_collision_free', self.checkPathCollisionFreeCallback)
 
 
     # End
@@ -148,7 +154,7 @@ class ArsPathPlannerRos:
 
   def run(self):
 
-    rospy.spin()
+    rclpy.spin(self)
 
     return
 
@@ -156,8 +162,9 @@ class ArsPathPlannerRos:
   def setRobotPoseRef(self, robot_pose_ref_msg):
 
     # Timestamp
-    if(robot_pose_ref_msg.header.stamp == rospy.Time(0)):
-      self.time_stamp_reference = rospy.Time.now()
+    time_stamp_reference = robot_pose_ref_msg.header.stamp
+    if(time_stamp_reference.sec == 0 and time_stamp_reference.nanosec == 0):
+      self.time_stamp_reference = self.get_clock().now()
     else:
       self.time_stamp_reference = robot_pose_ref_msg.header.stamp
 
@@ -224,7 +231,7 @@ class ArsPathPlannerRos:
     return
 
 
-  def computeCollisionFreePathCallback(self, request):
+  def computeCollisionFreePathCallback(self, request, response):
 
     #
     robot_pose_msg = request.pose_robot
@@ -234,26 +241,23 @@ class ArsPathPlannerRos:
     robot_pose_ref_msg = request.pose_desired
     self.setRobotPoseRef(robot_pose_ref_msg)
 
-
     # Call the path planner
     self.path_planner.planPathCall()
-
 
     #
     robot_traj_ref_msg = self.robotTrajMsgGen(self.path_planner.robot_traj)
     robot_traj_ref_raw_msg = self.robotTrajMsgGen(self.path_planner.robot_traj_raw)
 
     #
-    serv_response = GetCollisionFreePathResponse()
-    serv_response.sucess.data = self.path_planner.flag_set_robot_traj
-    serv_response.collision_free_traj = robot_traj_ref_msg
-    serv_response.collision_free_traj_raw = robot_traj_ref_raw_msg
+    response.success.data = self.path_planner.flag_set_robot_traj
+    response.collision_free_traj = robot_traj_ref_msg
+    response.collision_free_traj_raw = robot_traj_ref_raw_msg
 
     # end
-    return serv_response
+    return response
 
 
-  def checkPathCollisionFreeCallback(self, request):
+  def checkPathCollisionFreeCallback(self, request, response):
 
     #
     robot_traj_ref_msg = request.trajectory
@@ -281,12 +285,11 @@ class ArsPathPlannerRos:
     is_collision_free = self.path_planner.checkPathCollisionFree(robot_traj)
 
     # Response
-    serv_response = CheckPathCollisionFreeResponse()
-    serv_response.sucess.data = True
-    serv_response.is_collision_free.data = is_collision_free
+    response.success.data = True
+    response.is_collision_free.data = is_collision_free
 
     # End
-    return serv_response
+    return response
 
 
   def robotTrajMsgGen(self, robot_traj):
@@ -294,7 +297,7 @@ class ArsPathPlannerRos:
     # Generate message
     robot_traj_ref_msg = Path()
 
-    robot_traj_ref_msg.header.stamp = self.time_stamp_reference
+    robot_traj_ref_msg.header.stamp = self.time_stamp_reference.to_msg()
     robot_traj_ref_msg.header.frame_id = self.world_frame
 
     robot_traj_ref_msg.poses = []
@@ -304,7 +307,7 @@ class ArsPathPlannerRos:
 
         pose_i_msg = PoseStamped()
 
-        pose_i_msg.header.stamp = rospy.Time()
+        pose_i_msg.header.stamp = Time().to_msg()
         pose_i_msg.header.frame_id = self.world_frame
 
         pose_i_msg.pose.position.x = pose_i.position[0]

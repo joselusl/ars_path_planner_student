@@ -13,8 +13,7 @@ import time
 
 
 # ROS
-
-import rospy
+from rclpy.logging import get_logger
 
 import visualization_msgs.msg
 from visualization_msgs.msg import Marker
@@ -22,10 +21,10 @@ from visualization_msgs.msg import MarkerArray
 
 
 #
-import ars_lib_helpers
+import ars_lib_helpers.ars_lib_helpers as ars_lib_helpers
 
-from ars_connected_graph import *
-from ars_discrete_search import *
+from ars_path_planner_src.ars_connected_graph import *
+from ars_path_planner_src.ars_discrete_search import *
 
 
 
@@ -82,6 +81,8 @@ class ArsPathPlanner:
   # sampling distance cost calculation (in m)
   cost_sampling_dist_max = None
 
+  # ROS2 logger
+  logger = None
 
 
   #########
@@ -123,7 +124,6 @@ class ArsPathPlanner:
 
     # Config parameters
 
-
     # environment dimensions (in m)
     self.env_dims = {'x': [0.0, 0.0],
                       'y': [0.0, 0.0]}
@@ -144,6 +144,8 @@ class ArsPathPlanner:
     # sampling distance cost calculation (in m)
     self.cost_sampling_dist_max = 0.0
 
+    #
+    self.logger = get_logger('ars_path_planner_core')
 
     # End
     return
@@ -208,9 +210,9 @@ class ArsPathPlanner:
   def init(self):
 
     # Generate roadmap
-    print("Graph generation: start")
+    self.logger.info("Graph generation: start")
     self.generateRoadmap()
-    print("Graph generation: ended")
+    self.logger.info("Graph generation: ended")
 
     # End
     return
@@ -220,11 +222,11 @@ class ArsPathPlanner:
 
     # Init
     if(flag_verbose):
-      print("Creating graph")
+      self.logger.info("Creating graph")
 
     # Creating nodes
     if(flag_verbose):
-      print("Creating nodes")
+      self.logger.info("Creating nodes")
 
     #
     num_samples_x = round((self.env_dims['x'][1] - self.env_dims['x'][0])/self.env_sampling_dist_max_dim) + 1
@@ -241,14 +243,14 @@ class ArsPathPlanner:
 
     # Connecting nodes
     if(flag_verbose):
-      print("Connecting nodes")
+      self.logger.info("Connecting nodes")
 
     #
     self.roadmap.connectAllNodes(self.min_neighbourhood)
 
     # End
     if(flag_verbose):
-      print("Graph created")
+      self.logger.info("Graph created")
 
     #self.roadmap.printGraph()
 
@@ -393,7 +395,10 @@ class ArsPathPlanner:
       cost_segment = self.computeCostWithObstBetweenTwoPosi(robot_traj[waypoint_traj_i_idx].position[0:2], robot_traj[waypoint_traj_i_idx+1].position[0:2])
 
       if(math.isinf(cost_segment)):
-        cost_total = float('inf')
+        if(sys.version_info[0] < 3):
+          cost_total = float('inf')
+        else:
+          cost_total = math.inf
       else:
         cost_total += cost_segment
 
@@ -492,7 +497,7 @@ class ArsPathPlanner:
   def planPathCall(self, flag_verbose=True):
 
     if(flag_verbose):
-      print('New path planning request')
+      self.logger.info('New path planning request')
 
     ### Reset variables
     self.flag_set_robot_traj = False
@@ -500,15 +505,15 @@ class ArsPathPlanner:
 
     ### Checks
     if(not self.flag_set_robot_pose):
-      print('Robot pose not set')
+      self.logger.info('Robot pose not set')
       return
 
     if(not self.flag_set_obstacles_world):
-      print('Obstacle world not set')
+      self.logger.info('Obstacle world not set')
       return
 
     if(not self.flag_set_robot_pose_ref):
-      print('Robot pose ref not set')
+      self.logger.info('Robot pose ref not set')
       return
 
     ### Connect init and goal positions to the graph
@@ -525,7 +530,7 @@ class ArsPathPlanner:
 
     if(flag_verbose):
       end_time = time.time()
-      print("--- Preparing graph: %s seconds ---" % (end_time - start_time))
+      self.logger.info("--- Preparing graph: %s seconds ---" % (end_time - start_time))
 
     ### A-Star search - obtaining raw solution in graph
     if(flag_verbose):
@@ -534,7 +539,7 @@ class ArsPathPlanner:
     self.states_solution = self.a_star.states_solution
     if(flag_verbose):
       end_time = time.time()
-      print("--- Search and plan A-Star: %s seconds ---" % (end_time - start_time))
+      self.logger.info("--- Search and plan A-Star: %s seconds ---" % (end_time - start_time))
 
     ### Shorten solution - obtaining shortened solution in graph
     if(flag_verbose):
@@ -542,7 +547,7 @@ class ArsPathPlanner:
     self.shortenStateSolution()
     if(flag_verbose):
       end_time = time.time()
-      print("--- Shortening: %s seconds ---" % (end_time - start_time))
+      self.logger.info("--- Shortening: %s seconds ---" % (end_time - start_time))
 
     ### Create robot path raw - obtaining raw solution in space
     self.robot_traj_raw = self.create3DPathFromSolution(self.states_solution)
@@ -560,7 +565,7 @@ class ArsPathPlanner:
     self.roadmap.removeNode(node_goal_id)
     if(flag_verbose):
       end_time = time.time()
-      print("--- Cleaning graph: %s seconds ---" % (end_time - start_time))
+      self.logger.info("--- Cleaning graph: %s seconds ---" % (end_time - start_time))
 
     ### End
     return
@@ -571,7 +576,7 @@ class ArsPathPlanner:
     # Pre-check
     if(not robot_traj):
       return True
-
+    
     #
     cost_traj = self.computeCostWithObstInPath(robot_traj)
     
