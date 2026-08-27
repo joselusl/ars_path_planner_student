@@ -20,7 +20,6 @@ setup(
  maintainer_email='joseluis.sanlop@gmail.com',
  description='TODO: Package description',
  license='BSD',
- tests_require=['pytest'],
  entry_points={'console_scripts': [
  	    'ars_path_planner_core_ros_node = ars_path_planner_src.ars_path_planner_core_ros_node:main',
         'ars_path_planner_manager_ros_node = ars_path_planner_src.ars_path_planner_manager_ros_node:main',
