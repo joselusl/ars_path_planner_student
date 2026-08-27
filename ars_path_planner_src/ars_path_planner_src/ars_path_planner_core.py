@@ -229,8 +229,8 @@ class ArsPathPlanner:
       self.logger.info("Creating nodes")
 
     #
-    num_samples_x = round((self.env_dims['x'][1] - self.env_dims['x'][0])/self.env_sampling_dist_max_dim) + 1
-    num_samples_y = round((self.env_dims['y'][1] - self.env_dims['y'][0])/self.env_sampling_dist_max_dim) + 1
+    num_samples_x = int(round((self.env_dims['x'][1] - self.env_dims['x'][0])/self.env_sampling_dist_max_dim)) + 1
+    num_samples_y = int(round((self.env_dims['y'][1] - self.env_dims['y'][0])/self.env_sampling_dist_max_dim)) + 1
     
     #
     x_vals = np.linspace(self.env_dims['x'][0], self.env_dims['x'][1], num=num_samples_x, endpoint=True)
@@ -311,7 +311,7 @@ class ArsPathPlanner:
     else:
       diff_posi_vec_norm = np.zeros((2,), dtype=float)
 
-    num_samples_diff_posi_dist = round((diff_posi_dist - 0.0)/self.cost_sampling_dist_max) + 1
+    num_samples_diff_posi_dist = int(round((diff_posi_dist - 0.0)/self.cost_sampling_dist_max)) + 1
 
     sampl_diff_posi_dist_vals = np.linspace(0.0, diff_posi_dist, num=num_samples_diff_posi_dist, endpoint=True)
 
